@@ -1,0 +1,11 @@
+all {
+    @test not exists? {
+        path: "/home/dparfitt/foo"
+        on_init: "echo '--> \"init'"
+        on_pass: "echo '--> pass'"
+        on_fail: "echo '--> fail'"
+        on_term: "echo '--> term'"
+        retries: 3
+        retry_delay: 1
+    }
+}

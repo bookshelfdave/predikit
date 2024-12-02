@@ -1,5 +1,0 @@
-(
-not exists? /home/dparfitt/.foobar
-    :on_failure do_something()
-)
-

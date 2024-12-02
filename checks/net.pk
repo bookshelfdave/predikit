@@ -1,0 +1,12 @@
+all {
+    test not port_open? {
+        port: 6666
+    }
+
+    @test port_addr_open? {
+        addr_port: "localhost:53"
+        retries: 100
+        retry_delay: d(1m 6s)
+    }
+
+}

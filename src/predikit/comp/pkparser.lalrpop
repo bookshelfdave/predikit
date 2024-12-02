@@ -1,0 +1,239 @@
+use crate::predikit::comp::ast::*;
+use crate::predikit::data::params::{ChkActualParam, NamedType};
+use std::collections::HashMap;
+use lalrpop_util::ParseError;
+use crate::predikit::comp::tokens::{LexicalError,
+                                    strip_parens_and_trim,
+                                    strip_quotes};
+use crate::predikit::comp::validators::parse_validator;
+
+grammar;
+
+extern {
+    type Error = LexicalError;
+}
+
+match {
+    r"\s*" => { }, // The default whitespace skipping is disabled if an `ignore pattern` is specified
+    r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
+    r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },  // Skip `/* comments */`
+} else {  _ }
+
+// this doesn't seem like the ideal implementation, but it works for now
+pub ActualParam: ChkActualParam = {
+    <start: @L> <name:PktID> PktColon <value:PktInt> <end: @R> => {
+        ChkActualParam::new_int(name, value, start..end)
+    },
+    <start: @L> <name:PktID> PktColon <value:PktString> <end: @R> => {
+        ChkActualParam::new_string(name, value, start..end)
+    },
+    <start: @L> <name:PktID> PktColon <value:PktBool> <end: @R> => {
+        ChkActualParam::new_bool(name, value, start..end)
+    },
+
+    <start: @L> <name:PktID> PktColon <fxn:PktID> <value:PktConvFn> <end: @R> =>? {
+        let stripped = strip_parens_and_trim(&value);
+        let res = parse_validator(name, fxn.as_str(), value, start, end);
+        match res {
+            Err(reserr) =>  Err(ParseError::User { error: reserr }),
+            Ok(actual_param) => Ok(actual_param),
+        }
+    },
+
+    <start: @L> <name:PktID> PktColon <type_name:PktTypeName> <end: @R> =>? {
+        match type_name.as_str() {
+            "String" =>  Ok(ChkActualParam::new_named_type(name, NamedType::PtnString, start..end)),
+            "Int" => Ok(ChkActualParam::new_named_type(name, NamedType::PtnInt, start..end)),
+            "Bool" => Ok(ChkActualParam::new_named_type(name, NamedType::PtnBool, start..end)),
+            "Duration" => Ok(ChkActualParam::new_named_type(name, NamedType::PtnDuration, start..end)),
+            "Path" => Ok(ChkActualParam::new_named_type(name, NamedType::PtnPath, start..end)),
+            _unknown_type => Err(  ParseError::User { error: LexicalError::InvalidType(start..end) } ),
+        }
+    },
+
+}
+
+pub ActualParams: HashMap<String, ChkActualParam> = {
+    <params:ActualParam*> => {
+        let mut param_map:HashMap<String, ChkActualParam> = HashMap::new();
+        for param in params {
+            // TODO: fail if a key already exists
+            param_map.insert(param.name.clone(), param);
+        }
+        param_map
+    }
+}
+
+pub CheckDefs = {
+    CheckDef*
+}
+
+pub CheckMatcherOp: String  = {
+    PktEq => <>,
+    PktNeq => <>,
+    PktRE => <>,
+    PktGT => <>,
+    PktGTE => <>,
+    PktLT => <>,
+    PktLTE => <>,
+}
+
+//pub CheckMatcher: bool = {
+    //<start: @L>
+    //<op:CheckMatcherOp>
+    //<end: @R>
+//}
+
+pub CheckDef: AstCheckDef = {
+    <start: @L>
+    <retrying:PktRetrying?> PktTest <negated:PktNot?> <fn_name:PktID> PktBraceOpen
+        <actual_params:ActualParams>
+        <children:Children>
+        PktBraceClose
+    <end: @R>
+    => {
+        let is_retrying = retrying.is_some();
+        let is_negated = negated.is_some();
+        let is_group = false;
+        let content_address = start..end;
+        AstCheckDef {
+            fn_name,
+            is_negated,
+            is_retrying,
+            actual_params,
+            content_address,
+            is_group,
+            children,
+        }
+    }
+}
+
+pub GroupOrCheck: AstCheckDef = {
+    GroupDef,
+    CheckDef
+}
+
+pub Children: Vec<AstCheckDef> = {
+    GroupOrCheck*
+}
+
+pub GroupType: String = {
+    PktAll => "all".to_string(),
+    PktAny => "any".to_string(),
+    PktNone => "none".to_string(),
+}
+
+pub GroupDef: AstCheckDef = {
+    <start: @L>
+    <fn_name:GroupType>
+    PktBraceOpen
+        <actual_params:ActualParams>
+        <children:Children>
+    PktBraceClose
+    <end: @R>
+    => {
+        let is_retrying = false;
+        let is_negated = false;
+        let is_group = true;
+        let content_address = start..end;
+        AstCheckDef {
+            fn_name,
+            is_negated,
+            is_retrying,
+            actual_params,
+            content_address,
+            is_group,
+            children,
+        }
+    }
+}
+
+pub ToolInstanceParam: (String, AstActualParams) = {
+    PktDollar <instance_param_name:PktID> PktBraceOpen
+        <instance_param_kvs:ActualParams>
+    PktBraceClose => {
+        (instance_param_name, instance_param_kvs)
+    }
+}
+
+pub ToolInstanceParams: AstToolInstanceParams = {
+    <instance_params:ToolInstanceParam*> => {
+        let mut tool_instance_params = AstToolInstanceParams::new();
+        for (name, values) in instance_params {
+            tool_instance_params.insert(name, values);
+        }
+        tool_instance_params
+    }
+}
+
+
+pub ToolDef: AstToolDef = {
+    <start: @L>
+    PktTool <tool_name:PktID>
+    PktBraceOpen
+        <tool_def_params:ActualParams>
+        <tool_instance_params:ToolInstanceParams>
+    PktBraceClose
+    <end: @R>
+        => {
+            // TODO: probably don't need the AstToolDefParams struct anymore with the new parser
+            let params = AstToolDefParams::new(tool_def_params, tool_instance_params);
+            AstToolDef::new(tool_name, start..end, params)
+        }
+}
+
+pub TopLevelItem: TopLevelItem = {
+    GroupDef =>  TopLevelItem::Group(<>),
+    CheckDef => TopLevelItem::Check(<>),
+    ToolDef => TopLevelItem::Tool(<>),
+}
+
+pub TopLevel: (Vec<AstCheckDef>, Vec<AstToolDef>)= {
+    <items:TopLevelItem+> => {
+        let mut ast_checks : Vec<AstCheckDef> = vec![];
+        let mut ast_tools : Vec<AstToolDef> = vec![];
+        for item in items {
+            match item {
+                TopLevelItem::Group(g) => ast_checks.push(g),
+                TopLevelItem::Check(c) => ast_checks.push(c),
+                TopLevelItem::Tool(t) => ast_tools.push(t),
+            }
+        }
+        (ast_checks, ast_tools)
+    }
+}
+
+pub PktTool: String = "tool" => <>.to_string();
+pub PktNot: String = "not" => <>.to_string();
+pub PktTest: String = "test" => <>.to_string();
+pub PktAll: String = "all" => <>.to_string();
+pub PktAny: String = "any" => <>.to_string();
+pub PktNone: String = "none" => <>.to_string();
+pub PktRetrying: String = "@" => <>.to_string();
+pub PktColon: String = ":" => <>.to_string();
+pub PktDollar: String = "$" => <>.to_string();
+pub PktBraceOpen: String = "{" => <>.to_string();
+pub PktBraceClose: String = "}" => <>.to_string();
+
+pub PktEq:  String  = "=" => <>.to_string();
+pub PktNeq: String  = "!=" => <>.to_string();
+pub PktRE:  String  = "=~" => <>.to_string(); // r#"/ab+c/"#
+pub PktGTE: String  = ">=" => <>.to_string();
+pub PktGT:  String  = ">" => <>.to_string();
+pub PktLTE: String  = "<=" => <>.to_string();
+pub PktLT:  String  = "<" => <>.to_string();
+
+pub PktBool: bool = {
+    "true" => true,
+    "false" => false,
+};
+
+pub PktString: String =  <s:r#""([^"\\]|\\["\\bnfrt]|u[a-fA-F0-9]{4})*""#> => strip_quotes(&s.to_string());
+
+pub PktID: String =  r"[a-z][a-zA-Z0-9_?!.]*" => <>.to_string();
+
+pub PktTypeName:String =  r"[A-Z][a-zA-Z]+" => <>.to_string();
+
+pub PktInt:i64 =  <s:r"-?(?:0|[1-9]\d*)"> =>  s.parse::<i64>().unwrap();
+
+pub PktConvFn:String = r#"\(([^\)])*\)"# => <>.to_string();

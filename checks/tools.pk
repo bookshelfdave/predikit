@@ -1,0 +1,24 @@
+tool pacman_installed? {
+    cmd_template: "pacman -Qe {{pkg_name}}"
+    //failure_msg_template: "some_command --show-version {{pkg_name}}"
+    //pass_msg_template: "echo 'version was {{pkg_name}}'"
+    accepts_retry: false
+
+    $pkg_name {
+        type: String
+        required: true
+    }
+}
+
+all {
+    test pacman_installed? {
+        pkg_name: "neovim"
+        on_fail: "echo try installing the package: sudo pacman -Syu neovim1"
+        on_pass: "echo The package is installed"
+    }
+
+    test not pacman_installed? {
+        pkg_name: "vim"
+    }
+
+}

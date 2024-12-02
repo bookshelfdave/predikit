@@ -6,21 +6,29 @@ authors = ["Dave Parfitt"]
 
 [dependencies]
 clap = { version = "4.5.20", features = ["derive"] }
-is_executable = "1.0.4"
-which = "6.0.3"
 async-std = "1.13.0"
-tempfile = "3"
+
 log = "0.4.22"
-lazy_static = "1.5.0"
 regex = "1.11.1"
 colored = "2.1.0"
 env_logger = "0.11.5"
 port_scanner = "0.1.5"
-ariadne = { version = "0.5.0", features = ["auto-color"] }
-peginator = "0.7.0"
+shellexpand = "3.1.0"
+url = "2.5.4"
+is_executable = "1.0.4"
+which = "7.0.0"
 
-[build-dependencies]
-peginator_codegen = "0.7"
+codespan-reporting = "0.11.1"
+handlebars = "6.2.0"
+serde = "1.0.217"
+
+lalrpop-util = { version = "0.21.0", features = ["lexer", "unicode"] }
+duration-str = "0.12.0"
+
+tempfile = "3.14.0" # this is a test dep
+
+[build-dependencies] # <-- We added this and everything after!
+lalrpop = "0.22.0"
 
 # https://davidlattimore.github.io/posts/2024/02/04/speeding-up-the-rust-edit-build-run-cycle.html
 #[target.x86_64-unknown-linux-gnu]

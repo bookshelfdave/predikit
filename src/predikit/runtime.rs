@@ -1,3 +1,5 @@
+// Copyright (c) 2025 Dave Parfitt
+
 //
 // fn verify_params(&self) -> Result<(), ChkResult> {
 //     let required_params_count = self

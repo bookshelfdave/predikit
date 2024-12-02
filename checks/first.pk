@@ -1,24 +1,92 @@
 all {
-   :title "First group title"
+    // all tests in this group must pass. Other groups are `any` and `none`. Groups can be
+    // arbitrarily nested.
 
-    check exists? {
-     :path "/home/dparfitt/.zshrc"
-     :title "zsh config"
+    title: "Demo the tiny set of core tests available 😀"
+    test exists? {
+      // p(..) or path(..) allow for expansion of shell variables in a string
+       path: p( $HOME/.zshrc )
     }
 
-    none {
-        check exists? {
-         :path "/home/dparfitt/.foobar123"
-        }
-
-
-        check exists? {
-         :path "/home/dparfitt/.foob123"
-        }
-
-
-        check exists? {
-         :path "/home/dpa/.foob123"
-        }
+    // is the file /bin/zsh executable?
+    test executable? {
+      path: "/bin/zsh"
     }
+
+    // is the `zsh` command on the path?
+    test on_path? {
+      path: "zsh"
+    }
+
+    // Check if a file does NOT exist
+    test not exists? {
+       path: "/home/dparfitt/.foo"
+    }
+
+    // Only a few operations exist out of the box, but checking open
+    // ports and a few other misc networking tests could be useful.
+    test not port_open? {
+        port: 6666
+        // on_* properties are hooks that can run arbitrary shell commands
+        on_pass: "echo 'Development server port is not in use'"
+        on_fail: "echo 'Port 6666 is in use, please stop whatever service is using port 6666'"
+    }
+
+    // Prepending an @ to a test enables automatic retrying until success and makes the `retries` and `retry_delay`
+    // properties available in your test.
+    // This tests if `localhost:53` is open 10 times with a 1 second + 50 millisecond + 10ns delay (arbitrary, I know)
+    @test port_addr_open? {
+        addr_port: "localhost:53"
+        retries: 10
+        retry_delay: d(1s 50ms 10ns)  // d(..) represents a duration format
+    }
+}
+
+
+// Define reusable tools with a "tool" block that can be used with the "test" keyword.
+// Tool definitions can live in separate test files, so libraries of common functionality can be built up
+// and included in your tests.
+// See the tests below for examples of using this tool
+tool pacman_installed? {
+    // a tool has a Handlebars template that is rendered at runtime using
+    // defined properties. In this case, pkg_name is rendered as part of the command
+    cmd_template: "pacman -Qe {{pkg_name}}"
+
+    // Define a `pkg_name` property for `pacman_installed?` that only accepts strings
+    $pkg_name {
+        type: String
+        required: true
+    }
+}
+
+all {
+    title: "Check development dependencies using a user-defined tool"
+
+    // Check to see if docker is installed using the tool defined above
+    test pacman_installed? {
+        pkg_name: "docker"
+    }
+
+    // The tool can be used like a regular test (including hooks and retries)
+    test pacman_installed? {
+        pkg_name: "neovim"
+        on_fail: "echo try installing the package: sudo pacman -Syu neovim"
+    }
+
+    // ensure that vim is not installed (nothing against vim!)
+    test not pacman_installed? {
+        pkg_name: "vim"
+    }
+
+    // If the emacs package isn't installed, try to install it and repeat the test
+    @test pacman_installed? {
+        pkg_name: "emacs"
+        /* if emacs isn't installed, then install it, although passing the --noconfirm to
+           pacman is discouraged */
+        on_fail: "echo 'emacs not installed, attempting to install'; sudo pacman --noconfirm -S emacs"
+
+        retries: 2
+        retry_delay: d(0ms)  // don't sleep at all
+    }
+
 }

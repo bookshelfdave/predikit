@@ -1,0 +1,145 @@
+tool pacman_installed? {
+    cmd_template: "pacman -Qe {{pkg_name}}"
+    output_format: json
+
+    //failure_msg_template: "some_command --show-version {{pkg_name}}"
+    //pass_msg_template: "echo 'version was {{pkg_name}}'"
+
+    accepts_retry: false
+
+    $pkg_name {
+        type: String
+        required: true
+    }
+}
+
+all {
+    test pacman_installed? {
+        pkg_name: "neovim"
+    }
+
+}
+
+
+tool version_match? {
+    cmd_template: "{{version_cmd}}"
+    output_format: json
+
+    //failure_msg_template: "some_command --show-version {{pkg_name}}"
+    //pass_msg_template: "echo 'version was {{pkg_name}}'"
+
+    accepts_retry: false
+
+    $version_cmd {
+        type: Path
+        required: true
+    }
+
+    $desired_version {
+        type: String
+        required: true
+    }
+
+    match v as text {
+        v = "{{desired_version}}"
+    }
+}
+
+The problem I'm trying to solve is how to match against things like:
+-> version numbers (semver M.m.p)
+-> regular numbers
+-> number of days remaining in a <whatever>
+
+There can be multiple types of tools:
+- return code based (what I have today)
+- output processing based
+  - is this too complicated for what I want in Predikit?
+
+There's also a shell / command test
+- passes / fails based on output code
+
+test exe_version? {
+    cmd: "rustc --version | awk '{print $2 }'"
+}
+
+test command! = "1.3.8" {
+    cmdline: "rustc --version | awk '{ print $2 }'"
+}
+
+test docker_cmd! {
+    cmdline: "docker ps --output=json" // or whatever
+}
+
+
+test version_match? = "1.2.3" {
+    version_cmd: "rustc --version | awk '{ print $2 }'"
+}
+
+
+// These seem pretty good
+
+// This test must use a matcher to test it's output
+test permissions? = file_perms(0600) {
+    path: p(/home/dparfitt/.ssh)
+}
+
+
+// output from the command must convert to an integer for >, >=, <, <=
+test days_left_for_cert > 30 {
+    domain: "https://www.mozilla.org"
+}
+
+// = and != work for strings
+test get_some_string = "xyz" {
+    foo: "bar"
+}
+
+test get_some_string != "xyz" {
+    foo: "bar"
+}
+
+
+test permissions_ur? = true {
+    path: p(/some/file)
+}
+
+
+
+query version_match? {
+    cmd_template: "{{cmd}}"
+
+    $cmd {
+        type: Path
+        required: true
+    }
+}
+
+test version_match? {
+    cmd: "rust --version | awk '{ print $2 }' "
+} = "1.0.0"
+
+
+test version_match? {
+    cmd: "zig version"
+} = "0.13.0"
+
+
+// -------------
+
+query pkg_version? {
+    cmd_template: "pacman -Q {{pkg}} | awk '{print $2 }' "
+
+    $pkg {
+        type: String
+        required: true
+    }
+}
+
+test pkg_version? {
+    pkg: "zig"
+} = "0.13.0-2"
+
+
+test pkg_version? {
+    pkg: "zsh"
+} = "1.0.0"

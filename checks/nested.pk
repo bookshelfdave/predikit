@@ -1,0 +1,60 @@
+// tool free_space_gt? {
+//     cmd_template: "df -Ph {{path}} | tr -d '%' | awk 'NR==2{ exit $5>{{percentage}} ? 0 : 1}'"
+//      $path {
+//         type: "string"
+//         required: true
+//     }
+//     $percentage {
+//         type: "int"
+//         required: true
+//     }
+//
+//     $stuff {
+//         type: "bool"
+//         required: true
+//     }
+// }
+
+test not exists? {
+
+}
+
+all {
+   title: "some group test"
+    any {
+        title: "some test 1"
+        test not exists? {
+            path: "/home/dparfitt/foo"
+        }
+        @test not exists? {
+            path: "/home/dparfitt/bar"
+        }
+    }
+
+    none {
+        title: "some test 2"
+        test exists? {
+            path: "/home/dparfitt/x"
+        }
+        @test exists? {
+            path: "/home/dparfitt/y"
+        }
+    }
+}
+
+tool test_tool_2? {
+    cmd_template: "df -Ph {{path}} | tr -d '%' | awk 'NR==2{ exit $5>{{percentage}} ? 0 : 1}'"
+     $path {
+        type: "string"
+        required: true
+    }
+    $percentage {
+        type: "int"
+        required: true
+    }
+
+    $stuff {
+        type: "bool"
+        required: true
+    }
+}

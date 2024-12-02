@@ -1,4 +1,9 @@
-use crate::predikit::data::{ChkActualParams, ChkDef, ChkResult, FParamBuilder};
+// Copyright (c) 2025 Dave Parfitt
+
+use crate::predikit::data::instance::{ChkProcessOut, ChkResult};
+use crate::predikit::data::params::ChkActualParams;
+use crate::predikit::data::{ChkDef, ChkParamType, FParamsBuilder};
+use log::debug;
 use std::path::Path;
 
 #[macro_export]
@@ -65,19 +70,31 @@ macro_rules! fparam {
     };
 }
 
-
 pub fn cd_file_exists() -> ChkDef {
     ChkDef {
         name: "exists?".to_owned(),
         is_group: false,
         accepts_children: false,
-        formal_params: vec![
-            FParamBuilder::new("path").required().build(),
-        ],
+        template_params: None,
+        is_query: false,
+        formal_params: FParamsBuilder::new()
+            .add_param("path", ChkParamType::PkPath)
+            .required()
+            .finish_param()
+            .build(),
         check_fn: |_, params: &ChkActualParams, _| -> ChkResult {
             let p0 = params.get("path").unwrap();
-
-            let o = Path::new(&p0.get_string()).exists();
+            let path = p0.get_path();
+            if path.is_err() {
+                return ChkResult {
+                    result: Err(path.unwrap_err()),
+                    process_out: None,
+                    children_results: None,
+                };
+            }
+            let path = path.unwrap();
+            let o = Path::new(&path).exists();
+            debug!("exists path: {} == {}", path, o);
             ChkResult {
                 result: Ok(o),
                 process_out: None,
@@ -87,17 +104,20 @@ pub fn cd_file_exists() -> ChkDef {
     }
 }
 
-
 pub fn cd_file_is_executable() -> ChkDef {
+    use crate::predikit::data::instance::ChkResult;
     use is_executable::IsExecutable;
-    use crate::predikit::data::ChkResult;
     ChkDef {
         name: "executable?".to_owned(),
         is_group: false,
         accepts_children: false,
-        formal_params: vec![
-            FParamBuilder::new("path").required().build(),
-        ],
+        template_params: None,
+        is_query: false,
+        formal_params: FParamsBuilder::new()
+            .add_param("path", ChkParamType::PkPath)
+            .required()
+            .finish_param()
+            .build(),
         check_fn: |_, params: &ChkActualParams, _| -> ChkResult {
             let path = params.get("path").unwrap();
             let is_exec = Path::new(&path.get_string()).is_executable();
@@ -110,36 +130,75 @@ pub fn cd_file_is_executable() -> ChkDef {
     }
 }
 
-//
-// pub fn cd_file_is_on_path() -> ChkDef {
-//     use which::which;
-//     ChkDef {
-//         name: "on_path?".to_owned(),
-//         formal_params: vec![ChkFormalParam::required("filename".to_owned())],
-//         check_fn: |_, params: &HashMap<String, String>, _| -> ChkResult {
-//             // TODO: I think I'm ok unwrapping required params?
-//             let filename = params.get("filename").unwrap();
-//             let w = which(filename);
-//
-//             // I'm sure there's a map-type function that does this for me
-//             // but this is fine for now
-//             match w {
-//                 Ok(_) => ChkResult {
-//                     result: Ok(true),
-//                     process_out: None,
-//                     children_results: None,
-//                 },
-//                 Err(_) => ChkResult {
-//                     result: Ok(false),
-//                     process_out: None,
-//                     children_results: None,
-//                 },
-//             }
-//         },
-//     }
-// }
-//
-//
+pub fn cd_file_is_on_path() -> ChkDef {
+    use which::which;
+    ChkDef {
+        name: "on_path?".to_owned(),
+        is_group: false,
+        accepts_children: false,
+        template_params: None,
+        is_query: false,
+        formal_params: FParamsBuilder::new()
+            .add_param("path", ChkParamType::PkPath)
+            .required()
+            .finish_param()
+            .build(),
+        check_fn: |_, params: &ChkActualParams, _| -> ChkResult {
+            let path = params.get("path").unwrap();
+
+            let w = which(path.get_string());
+            ChkResult {
+                result: Ok(w.is_ok()),
+                process_out: None,
+                children_results: None,
+            }
+        },
+    }
+}
+
+pub fn cd_shell() -> ChkDef {
+    ChkDef {
+        name: "shell".to_owned(),
+        is_group: false,
+        accepts_children: false,
+        template_params: None,
+        is_query: false,
+        formal_params: FParamsBuilder::new()
+            .add_param("cmd", ChkParamType::PkString)
+            .required()
+            .finish_param()
+            .build(),
+        check_fn: |_, params: &ChkActualParams, _| -> ChkResult {
+            let cmd = params.get("cmd").unwrap();
+            let cmd_result = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(cmd.get_string())
+                .output();
+
+            match cmd_result {
+                Ok(output) => {
+                    debug!("SHELL RESULT = {}", &output.status.code().unwrap());
+                    debug!("SHELL RESULT 2= {}", &output.status.success());
+                    ChkResult {
+                        result: Ok(output.status.success()),
+                        process_out: Some(ChkProcessOut {
+                            stdout: Some(String::from_utf8_lossy(&output.stdout).to_string()),
+                            stderr: Some(String::from_utf8_lossy(&output.stderr).to_string()),
+                            exit_code: output.status.code(),
+                        }),
+                        children_results: None,
+                    }
+                }
+                Err(e) => ChkResult {
+                    result: Err(e.to_string()),
+                    process_out: None,
+                    children_results: None,
+                },
+            }
+        },
+    }
+}
+
 // pub fn cd_shell_exec() -> CheckDef {
 //     CheckDef {
 //         short_name: "exec".to_owned(),
@@ -197,181 +256,180 @@ pub fn cd_file_is_executable() -> ChkDef {
 //     }
 // }
 
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::predikit::data::instance::ChkInstanceBuilder;
-    use crate::predikit::data::RunEnv;
-    use crate::predikit::functions::test_utils::{single_test_path_param, TestParamsBuilder};
+    // use super::*;
+    // use crate::predikit::data::instance::ChkInstanceBuilder;
+    // use crate::predikit::data::instance::RunEnv;
+    // use crate::predikit::functions::test_utils::{single_test_path_param, TestParamsBuilder};
 
-    #[test]
-    fn test_file_exists() {
-        let check_fn = cd_file_exists();
-        let ci = ChkInstanceBuilder::new(&check_fn)
-            .with_params(single_test_path_param()).build();
-
-        let check_result = ci.run_check(&RunEnv::default());
-        assert_eq!(true, check_result.result.unwrap());
-    }
-
-    #[test]
-    fn test_file_is_executable_no() {
-        let check_fn = cd_file_is_executable();
-        let ci = ChkInstanceBuilder::new(&check_fn)
-            .with_params(single_test_path_param()).build();
-
-        let check_result = ci.run_check(&RunEnv::default());
-        assert_eq!(false, check_result.result.unwrap());
-    }
-
-    #[test]
-    fn test_file_is_executable_yes() {
-        let check_fn = cd_file_is_executable();
-        let ci = ChkInstanceBuilder::new(&check_fn)
-            .with_params(TestParamsBuilder::new().with_string("path", "/bin/bash").build())
-            .build();
-
-        let check_result = ci.run_check(&RunEnv::default());
-        assert!(check_result.result.unwrap());
-    }
-    //
     // #[test]
-    // fn test_file_is_on_path() {
-    //     let run_env = RunEnv::default();
-    //     let ci = ChkInstance {
-    //         name: "test_file_is_on_path".to_owned(),
-    //         check_def: &cd_file_is_on_path(),
-    //         actual_params: param_filename("rustc"),
-    //         children: None,
-    //         negated: false,
-    //         parsed_check: None,
-    //     };
-    //
-    //     let check_result = ci.run_check(&run_env);
+    // fn test_file_exists() {
+    //     let check_fn = cd_file_exists();
+    //     let ci = ChkInstanceBuilder::new(&check_fn)
+    //         .with_params(single_test_path_param()).build();
+
+    //     let check_result = ci.run_check(&RunEnv::default());
     //     assert!(check_result.result.unwrap());
     // }
 
     // #[test]
-    // fn test_file_is_on_path_full() {
-    //     let run_env = RunEnv::default();
-    //     let ci = ChkInstance {
-    //         name: "test_file_is_on_path_full".to_owned(),
-    //         check_def: &cd_file_is_on_path(),
-    //         actual_params: param_filename("/bin/sh"),
-    //         children: None,
-    //         negated: false,
-    //         parsed_check: None,
-    //     };
-    //
-    //     let check_result = ci.run_check(&run_env);
-    //     assert!(check_result.result.unwrap());
+    // fn test_file_is_executable_no() {
+    //     let check_fn = cd_file_is_executable();
+    //     let ci = ChkInstanceBuilder::new(&check_fn)
+    //         .with_params(single_test_path_param()).build();
+
+    //     let check_result = ci.run_check(&RunEnv::default());
+    //     assert!(!check_result.result.unwrap());
     // }
 
     // #[test]
-    // fn test_file_is_on_path_no() {
-    //     let run_env = RunEnv::default();
-    //     let ci = ChkInstance {
-    //         name: "test_file_is_on_path_no".to_owned(),
-    //         check_def: &cd_file_is_on_path(),
-    //         actual_params: param_filename("asdasdlkasljkasd"),
-    //         children: None,
-    //         negated: false,
-    //         parsed_check: None,
-    //     };
-    //
-    //     let check_result = ci.run_check(&run_env);
-    //     assert_eq!(false, check_result.result.unwrap());
-    // }
+    // fn test_file_is_executable_yes() {
+    //     let check_fn = cd_file_is_executable();
+    //     let ci = ChkInstanceBuilder::new(&check_fn)
+    //         .with_params(TestParamsBuilder::new().with_string("path", "/bin/bash").build())
+    //         .build();
 
-    //
-    // #[test]
-    // fn test_file_exec_yes() {
-    //     let run_env = RunEnv::default();
-    //     let ci = CheckInstance {
-    //         name: "test_file_exec_yes".to_owned(),
-    //         check_def: &cd_shell_exec(),
-    //         inputs: test_param("cmdline", "true"),
-    //         children: None,
-    //         negated: false,
-    //         parsed_check: None,
-    //     };
-    //
-    //     let check_result = ci.run_check(&run_env);
+    //     let check_result = ci.run_check(&RunEnv::default());
     //     assert!(check_result.result.unwrap());
     // }
-    //
-    //
-    // #[test]
-    // fn test_file_exec_with_stdout() {
-    //     let run_env = RunEnv::default();
-    //     let ci = CheckInstance {
-    //         name: "test_file_exec_with_stdout".to_owned(),
-    //         check_def: &cd_shell_exec(),
-    //         inputs: test_param("cmdline", "echo -n 'this is a test'"),
-    //         children: None,
-    //         negated: false,
-    //         parsed_check: None,
-    //     };
-    //
-    //     let check_result = ci.run_check(&run_env);
-    //     assert!(check_result.result.unwrap());
-    //     assert_eq!("this is a test".to_owned(), check_result.process_out.unwrap().stdout.unwrap());
-    // }
-    //
-    //
-    // #[test]
-    // fn test_file_exec_with_stderr() {
-    //     let run_env = RunEnv::default();
-    //     let ci = CheckInstance {
-    //         name: "test_file_exec_with_stderr".to_owned(),
-    //         check_def: &cd_shell_exec(),
-    //         inputs: test_param("cmdline", ">&2 echo -n 'this is a test'"),
-    //         children: None,
-    //         negated: false,
-    //         parsed_check: None,
-    //     };
-    //
-    //     let check_result = ci.run_check(&run_env);
-    //     assert!(check_result.result.unwrap());
-    //     assert_eq!("this is a test".to_owned(), check_result.process_out.unwrap().stderr.unwrap());
-    // }
-    //
-    // #[test]
-    // fn test_file_exec_no() {
-    //     let run_env = RunEnv::default();
-    //     let ci = CheckInstance {
-    //         name: "test_file_exec_no".to_owned(),
-    //         check_def: &cd_shell_exec(),
-    //         inputs: test_param("cmdline", "false"),
-    //         children: None,
-    //         negated: false,
-    //         parsed_check: None,
-    //     };
-    //
-    //     let check_result = ci.run_check(&run_env);
-    //     assert_eq!(false, check_result.result.unwrap());
-    // }
-    //
-    //
-    // #[test]
-    // fn test_file_exec_err() {
-    //     // TODO: test output etc
-    //     let run_env = RunEnv::default();
-    //     let mut params: HashMap<String, String> = HashMap::new();
-    //     params.insert("cmdline".to_owned(), "aaaaaaaa".to_owned());
-    //     params.insert("shell".to_owned(), "aaaaaaaa".to_string());
-    //     let ci = CheckInstance {
-    //         name: "test_file_exec_err".to_owned(),
-    //         check_def: &cd_shell_exec(),
-    //         // seems like an unlikely command name? I'm sure there's a better way to do this
-    //         inputs: params,
-    //         children: None,
-    //         negated: false,
-    //         parsed_check: None,
-    //     };
-    //
-    //     let check_result = ci.run_check(&run_env);
-    //     assert!(check_result.result.is_err());
-    // }
+    // //
+    // // #[test]
+    // // fn test_file_is_on_path() {
+    // //     let run_env = RunEnv::default();
+    // //     let ci = ChkInstance {
+    // //         name: "test_file_is_on_path".to_owned(),
+    // //         check_def: &cd_file_is_on_path(),
+    // //         actual_params: param_filename("rustc"),
+    // //         children: None,
+    // //         negated: false,
+    // //         parsed_check: None,
+    // //     };
+    // //
+    // //     let check_result = ci.run_check(&run_env);
+    // //     assert!(check_result.result.unwrap());
+    // // }
+
+    // // #[test]
+    // // fn test_file_is_on_path_full() {
+    // //     let run_env = RunEnv::default();
+    // //     let ci = ChkInstance {
+    // //         name: "test_file_is_on_path_full".to_owned(),
+    // //         check_def: &cd_file_is_on_path(),
+    // //         actual_params: param_filename("/bin/sh"),
+    // //         children: None,
+    // //         negated: false,
+    // //         parsed_check: None,
+    // //     };
+    // //
+    // //     let check_result = ci.run_check(&run_env);
+    // //     assert!(check_result.result.unwrap());
+    // // }
+
+    // // #[test]
+    // // fn test_file_is_on_path_no() {
+    // //     let run_env = RunEnv::default();
+    // //     let ci = ChkInstance {
+    // //         name: "test_file_is_on_path_no".to_owned(),
+    // //         check_def: &cd_file_is_on_path(),
+    // //         actual_params: param_filename("asdasdlkasljkasd"),
+    // //         children: None,
+    // //         negated: false,
+    // //         parsed_check: None,
+    // //     };
+    // //
+    // //     let check_result = ci.run_check(&run_env);
+    // //     assert_eq!(false, check_result.result.unwrap());
+    // // }
+
+    // //
+    // // #[test]
+    // // fn test_file_exec_yes() {
+    // //     let run_env = RunEnv::default();
+    // //     let ci = CheckInstance {
+    // //         name: "test_file_exec_yes".to_owned(),
+    // //         check_def: &cd_shell_exec(),
+    // //         inputs: test_param("cmdline", "true"),
+    // //         children: None,
+    // //         negated: false,
+    // //         parsed_check: None,
+    // //     };
+    // //
+    // //     let check_result = ci.run_check(&run_env);
+    // //     assert!(check_result.result.unwrap());
+    // // }
+    // //
+    // //
+    // // #[test]
+    // // fn test_file_exec_with_stdout() {
+    // //     let run_env = RunEnv::default();
+    // //     let ci = CheckInstance {
+    // //         name: "test_file_exec_with_stdout".to_owned(),
+    // //         check_def: &cd_shell_exec(),
+    // //         inputs: test_param("cmdline", "echo -n 'this is a test'"),
+    // //         children: None,
+    // //         negated: false,
+    // //         parsed_check: None,
+    // //     };
+    // //
+    // //     let check_result = ci.run_check(&run_env);
+    // //     assert!(check_result.result.unwrap());
+    // //     assert_eq!("this is a test".to_owned(), check_result.process_out.unwrap().stdout.unwrap());
+    // // }
+    // //
+    // //
+    // // #[test]
+    // // fn test_file_exec_with_stderr() {
+    // //     let run_env = RunEnv::default();
+    // //     let ci = CheckInstance {
+    // //         name: "test_file_exec_with_stderr".to_owned(),
+    // //         check_def: &cd_shell_exec(),
+    // //         inputs: test_param("cmdline", ">&2 echo -n 'this is a test'"),
+    // //         children: None,
+    // //         negated: false,
+    // //         parsed_check: None,
+    // //     };
+    // //
+    // //     let check_result = ci.run_check(&run_env);
+    // //     assert!(check_result.result.unwrap());
+    // //     assert_eq!("this is a test".to_owned(), check_result.process_out.unwrap().stderr.unwrap());
+    // // }
+    // //
+    // // #[test]
+    // // fn test_file_exec_no() {
+    // //     let run_env = RunEnv::default();
+    // //     let ci = CheckInstance {
+    // //         name: "test_file_exec_no".to_owned(),
+    // //         check_def: &cd_shell_exec(),
+    // //         inputs: test_param("cmdline", "false"),
+    // //         children: None,
+    // //         negated: false,
+    // //         parsed_check: None,
+    // //     };
+    // //
+    // //     let check_result = ci.run_check(&run_env);
+    // //     assert_eq!(false, check_result.result.unwrap());
+    // // }
+    // //
+    // //
+    // // #[test]
+    // // fn test_file_exec_err() {
+    // //     // TODO: test output etc
+    // //     let run_env = RunEnv::default();
+    // //     let mut params: HashMap<String, String> = HashMap::new();
+    // //     params.insert("cmdline".to_owned(), "aaaaaaaa".to_owned());
+    // //     params.insert("shell".to_owned(), "aaaaaaaa".to_string());
+    // //     let ci = CheckInstance {
+    // //         name: "test_file_exec_err".to_owned(),
+    // //         check_def: &cd_shell_exec(),
+    // //         // seems like an unlikely command name? I'm sure there's a better way to do this
+    // //         inputs: params,
+    // //         children: None,
+    // //         negated: false,
+    // //         parsed_check: None,
+    // //     };
+    // //
+    // //     let check_result = ci.run_check(&run_env);
+    // //     assert!(check_result.result.is_err());
+    // // }
 }

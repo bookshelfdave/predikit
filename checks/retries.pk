@@ -1,0 +1,9 @@
+all {
+    @test exists? {
+        path: p ($HOME/testfile)
+        retries: 10000
+        retry_delay: d(0s)
+        on_fail: "touch /home/dparfitt/testfile"
+    }
+
+}

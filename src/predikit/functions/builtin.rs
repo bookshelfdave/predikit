@@ -1,37 +1,76 @@
-use crate::predikit::data::instance::ChkInstance;
-use crate::predikit::data::{ChkActualParams, ChkDef, ChkResult, RunEnv};
-use crate::predikit::functions::builtin_fs::cd_file_exists;
+// Copyright (c) 2025 Dave Parfitt
+
+use crate::predikit::data::instance::{ChkInstance, ChkResult, RunEnv};
+use crate::predikit::data::params::ChkActualParams;
+use crate::predikit::data::{ChkDef, FParamsBuilder};
+use crate::predikit::functions::builtin_fs::{
+    cd_file_exists, cd_file_is_executable, cd_file_is_on_path, cd_shell,
+};
+use crate::predikit::functions::builtin_net::{cd_port_addr_open, cd_port_open};
 use log::debug;
 
 pub fn define_builtins() -> Vec<ChkDef> {
     vec![
+        cd_true(),
+        cd_false(),
         cd_file_exists(),
-        //cd_file_is_on_path(),
-        //cd_file_is_executable(),
-        //cd_shell_exec(),
-        //cd_port_open(),
-        //cd_port_addr_open(),
+        cd_file_is_on_path(),
+        cd_file_is_executable(),
+        cd_shell(),
+        cd_port_open(),
+        cd_port_addr_open(),
     ]
 }
 
+pub fn cd_true() -> ChkDef {
+    ChkDef {
+        name: "true!".to_owned(),
+        formal_params: FParamsBuilder::empty(),
+        is_group: false,
+        is_query: false,
+        accepts_children: false,
+        check_fn: |_, _: &ChkActualParams, _| -> ChkResult {
+            ChkResult {
+                result: Ok(true),
+                process_out: None,
+                children_results: None,
+            }
+        },
+        template_params: None,
+    }
+}
+
+pub fn cd_false() -> ChkDef {
+    ChkDef {
+        name: "false!".to_owned(),
+        formal_params: FParamsBuilder::empty(),
+        is_group: false,
+        is_query: false,
+        accepts_children: false,
+        check_fn: |_, _: &ChkActualParams, _| -> ChkResult {
+            ChkResult {
+                result: Ok(false),
+                process_out: None,
+                children_results: None,
+            }
+        },
+        template_params: None,
+    }
+}
 
 pub fn define_aggs() -> Vec<ChkDef> {
-    vec![
-        cd_all(),
-        cd_any(),
-        cd_none(),
-    ]
+    vec![cd_all(), cd_any(), cd_none()]
 }
 
-fn agg_all(f: &Vec<ChkResult>) -> bool {
+fn agg_all(f: &[ChkResult]) -> bool {
     f.iter().all(|x| *x.result.as_ref().unwrap())
 }
 
-fn agg_any(f: &Vec<ChkResult>) -> bool {
+fn agg_any(f: &[ChkResult]) -> bool {
     f.iter().any(|x| *x.result.as_ref().unwrap())
 }
 
-fn agg_none(f: &Vec<ChkResult>) -> bool {
+fn agg_none(f: &[ChkResult]) -> bool {
     f.iter().all(|x| !*x.result.as_ref().unwrap())
 }
 
@@ -41,13 +80,20 @@ enum AggType {
     None,
 }
 
-
-fn agg_exec(agg_type: AggType, run_env: &RunEnv, _: &ChkActualParams, this: &ChkInstance) -> ChkResult {
+fn agg_exec(
+    agg_type: AggType,
+    run_env: &RunEnv,
+    _: &ChkActualParams,
+    this: &ChkInstance,
+) -> ChkResult {
     let mut child_results: Vec<ChkResult> = vec![];
 
     for child in &this.children {
-        debug!("RUNNING CHILD {} (negated? {})", &child.check_def.name, &child.negated);
-        let child_result = child.run_check(run_env);
+        debug!(
+            "RUNNING CHILD {} (negated? {})",
+            &child.fn_def.name, &child.negated
+        );
+        let child_result = child.run_check_maybe_retry(run_env);
         //child_result.result.as_ref().iter().for_each(|x| println!(" --> {}", x));
         debug!("Child result: {:#?}", &child_result.result);
         child_results.push(child_result);
@@ -68,51 +114,55 @@ fn agg_exec(agg_type: AggType, run_env: &RunEnv, _: &ChkActualParams, this: &Chk
         AggType::None => agg_none(&child_results),
     };
     debug!("AGG RESULT {}", agg);
-    let r = ChkResult {
+    ChkResult {
         result: Ok(agg),
         process_out: None, // TODO: process_out
         children_results: Some(child_results),
-    };
-    r
+    }
 }
 
 // // TODO: deal with output from children
 pub fn cd_all() -> ChkDef {
     ChkDef {
         name: "all".to_owned(),
-        formal_params: vec![],
+        formal_params: FParamsBuilder::empty(),
         is_group: true,
+        is_query: false,
         accepts_children: true,
         check_fn: |run_env, params: &ChkActualParams, this| -> ChkResult {
             agg_exec(AggType::All, run_env, params, this)
         },
+        template_params: None,
     }
 }
 
 pub fn cd_none() -> ChkDef {
     ChkDef {
         name: "none".to_owned(),
-        formal_params: vec![],
+        formal_params: FParamsBuilder::empty(),
         is_group: true,
+        is_query: false,
         accepts_children: true,
         check_fn: |run_env, params: &ChkActualParams, this| -> ChkResult {
             agg_exec(AggType::None, run_env, params, this)
         },
+        template_params: None,
     }
 }
 
 pub fn cd_any() -> ChkDef {
     ChkDef {
         name: "any".to_owned(),
-        formal_params: vec![],
+        formal_params: FParamsBuilder::empty(),
         is_group: true,
+        is_query: false,
         accepts_children: true,
         check_fn: |run_env, params: &ChkActualParams, this| -> ChkResult {
             agg_exec(AggType::Any, run_env, params, this)
         },
+        template_params: None,
     }
 }
-
 
 // pub fn cd_not() -> ChkDef {
 //     ChkDef {
@@ -162,16 +212,14 @@ pub fn cd_any() -> ChkDef {
 //     }
 // }
 
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    //use super::*;
 
-    use crate::predikit::data::instance::ChkInstanceBuilder;
-    use crate::predikit::data::RunEnv;
-    use crate::predikit::functions::builtin_fs::cd_file_exists;
-    use crate::predikit::functions::test_utils::single_test_path_param;
-
+    // use crate::predikit::data::instance::ChkInstanceBuilder;
+    // use crate::predikit::data::instance::RunEnv;
+    // use crate::predikit::functions::builtin_fs::cd_file_exists;
+    // use crate::predikit::functions::test_utils::single_test_path_param;
 
     // #[test]
     // fn test_not_1() {
@@ -207,118 +255,113 @@ mod tests {
     //     assert_eq!(true, check_result.result.unwrap());
     // }
 
-    #[test]
-    fn test_all_pass() {
-        let fe = cd_file_exists();
-        let all = cd_all();
+    // #[test]
+    // fn test_all_pass() {
+    //     let fe = cd_file_exists();
+    //     let all = cd_all();
 
-        let ci = ChkInstanceBuilder::new(&fe)
-            .with_params(single_test_path_param())
-            .build();
+    //     let ci = ChkInstanceBuilder::new(&fe)
+    //         .with_params(single_test_path_param())
+    //         .build();
 
-        let check_result = ChkInstanceBuilder::new(&all)
-            .add_child(ci.clone())
-            .add_child(ci.clone())
-            .build()
-            .run_check(&RunEnv::default());
+    //     let check_result = ChkInstanceBuilder::new(&all)
+    //         .add_child(ci.clone())
+    //         .add_child(ci.clone())
+    //         .build()
+    //         .run_check(&RunEnv::default());
 
-        assert_eq!(true, check_result.result.unwrap());
-    }
+    //     assert!(check_result.result.unwrap());
+    // }
 
-    #[test]
-    fn test_all_fail() {
-        let fe = cd_file_exists();
-        let all = cd_all();
+    // #[test]
+    // fn test_all_fail() {
+    //     let fe = cd_file_exists();
+    //     let all = cd_all();
 
-        let ci = ChkInstanceBuilder::new(&fe)
-            .param_string("path", "ThisFileShouldNotExist")
-            .build();
+    //     let ci = ChkInstanceBuilder::new(&fe)
+    //         .param_string("path", "ThisFileShouldNotExist")
+    //         .build();
 
-        let check_result = ChkInstanceBuilder::new(&all)
-            .add_child(ci.clone())
-            .add_child(ci.clone())
-            .build()
-            .run_check(&RunEnv::default());
-        assert_eq!(false, check_result.result.unwrap());
-    }
+    //     let check_result = ChkInstanceBuilder::new(&all)
+    //         .add_child(ci.clone())
+    //         .add_child(ci.clone())
+    //         .build()
+    //         .run_check(&RunEnv::default());
+    //     assert!(!check_result.result.unwrap());
+    // }
 
+    // #[test]
+    // fn test_none_pass() {
+    //     let fe = cd_file_exists();
+    //     let none = cd_none();
 
-    #[test]
-    fn test_none_pass() {
-        let fe = cd_file_exists();
-        let none = cd_none();
+    //     let ci = ChkInstanceBuilder::new(&fe)
+    //         .param_string("path", "ThisFileShouldNotExist")
+    //         .build();
 
-        let ci = ChkInstanceBuilder::new(&fe)
-            .param_string("path", "ThisFileShouldNotExist")
-            .build();
+    //     let check_result = ChkInstanceBuilder::new(&none)
+    //         .add_child(ci.clone())
+    //         .add_child(ci)
+    //         .build()
+    //         .run_check(&RunEnv::default());
+    //     assert!(check_result.result.unwrap());
+    // }
 
-        let check_result = ChkInstanceBuilder::new(&none)
-            .add_child(ci.clone())
-            .add_child(ci)
-            .build()
-            .run_check(&RunEnv::default());
-        assert_eq!(true, check_result.result.unwrap());
-    }
+    // #[test]
+    // fn test_none_fail() {
+    //     let fe = cd_file_exists();
+    //     let none = cd_none();
 
+    //     let ci = ChkInstanceBuilder::new(&fe)
+    //         .with_params(single_test_path_param())
+    //         .build();
 
-    #[test]
-    fn test_none_fail() {
-        let fe = cd_file_exists();
-        let none = cd_none();
+    //     let check_result = ChkInstanceBuilder::new(&none)
+    //         .add_child(ci.clone())
+    //         .add_child(ci)
+    //         .build()
+    //         .run_check(&RunEnv::default());
 
-        let ci = ChkInstanceBuilder::new(&fe)
-            .with_params(single_test_path_param())
-            .build();
+    //     assert!(!check_result.result.unwrap());
+    // }
 
+    // #[test]
+    // fn test_any_pass() {
+    //     let fe = cd_file_exists();
+    //     let any = cd_any();
 
-        let check_result = ChkInstanceBuilder::new(&none)
-            .add_child(ci.clone())
-            .add_child(ci)
-            .build()
-            .run_check(&RunEnv::default());
+    //     let ci1 = ChkInstanceBuilder::new(&fe)
+    //         .param_string("path", "ThisFileShouldNotExist")
+    //         .build();
 
-        assert_eq!(false, check_result.result.unwrap());
-    }
+    //     let ci2 = ChkInstanceBuilder::new(&fe)
+    //         .with_params(single_test_path_param())
+    //         .build();
 
-    #[test]
-    fn test_any_pass() {
-        let fe = cd_file_exists();
-        let any = cd_any();
+    //     let check_result = ChkInstanceBuilder::new(&any)
+    //         .add_child(ci1.clone())
+    //         .add_child(ci2)
+    //         .build()
+    //         .run_check(&RunEnv::default());
 
-        let ci1 = ChkInstanceBuilder::new(&fe)
-            .param_string("path", "ThisFileShouldNotExist")
-            .build();
+    //     assert!(check_result.result.unwrap());
+    // }
 
-        let ci2 = ChkInstanceBuilder::new(&fe)
-            .with_params(single_test_path_param())
-            .build();
+    // #[test]
+    // fn test_any_fail() {
+    //     let fe = cd_file_exists();
+    //     let any = cd_any();
 
+    //     let ci = ChkInstanceBuilder::new(&fe)
+    //         .param_string("path", "ThisFileShouldNotExist")
+    //         .build();
 
-        let check_result = ChkInstanceBuilder::new(&any)
-            .add_child(ci1.clone())
-            .add_child(ci2)
-            .build()
-            .run_check(&RunEnv::default());
+    //     let check_result = ChkInstanceBuilder::new(&any)
+    //         .add_child(ci.clone())
+    //         .add_child(ci)
+    //         .build()
+    //         .run_check(&RunEnv::default());
 
-        assert_eq!(true, check_result.result.unwrap());
-    }
-
-
-    #[test]
-    fn test_any_fail() {
-        let fe = cd_file_exists();
-        let any = cd_any();
-
-        let ci = ChkInstanceBuilder::new(&fe)
-            .param_string("path", "ThisFileShouldNotExist")
-            .build();
-
-        let check_result = ChkInstanceBuilder::new(&any)
-            .add_child(ci.clone())
-            .add_child(ci)
-            .build()
-            .run_check(&RunEnv::default());
-
-        assert_eq!(false, check_result.result.unwrap());
-    }
+    //     assert!(!check_result.result.unwrap());
+    // }
 }

@@ -1,3 +1,5 @@
+// Copyright (c) 2025 Dave Parfitt
+
 // use crate::predikit::data::{ChkInstance, ChkResult, RunEnv};
 // use std::fmt;
 //

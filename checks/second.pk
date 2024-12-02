@@ -1,0 +1,28 @@
+
+
+tool free_space_gt? {
+    cmd_template: "df -Ph {{path}} | tr -d '%' | awk 'NR==2{ exit $5>{{percentage}} ? 0 : 1}'"
+     $path {
+        type: String
+        required: true
+    }
+    $percentage {
+        type: Int
+        required: true
+    }
+
+    $stuff {
+        type: Bool
+        required: false
+    }
+}
+
+all {
+    title: "Testing core commands"
+    test free_space_gt? {
+        path: "/home/dparfitt"
+        percentage: 50
+        stuff: true
+    }
+
+}

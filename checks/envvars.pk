@@ -1,0 +1,48 @@
+tool envvar_eq? {
+     cmd_template: "printenv {{varname}} | grep '^{{should_be}}$'"
+     $varname {
+        type: String
+        required: true
+    }
+
+     $should_be {
+        type: String
+        required: true
+    }
+}
+
+tool envvar_set? {
+     cmd_template: "printenv {{varname}}"
+     $varname {
+        type: String
+        required: true
+    }
+}
+
+all {
+    test envvar_set? {
+        varname: "XDG_CACHE_HOME"
+    }
+    none {
+        test envvar_eq? {
+            varname: "XDG_CACHE_HOME"
+            should_be: "/home/dparfitt/.cache"
+        }
+        test envvar_eq? {
+            varname: "XDG_CACHE_HOME"
+            should_be: "/home/dparfitt/.cache"
+        }
+    }
+
+}
+
+any {
+    test envvar_set? {
+        varname: "XDG_CACHE_HOME"
+    }
+    test envvar_eq? {
+       varname: "XDG_CACHE_HOME"
+       should_be: "/home/dparfitt/.cache"
+    }
+
+}
