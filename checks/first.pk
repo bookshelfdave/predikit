@@ -1,0 +1,24 @@
+all {
+   :title "First group title"
+
+    check exists? {
+     :path "/home/dparfitt/.zshrc"
+     :title "zsh config"
+    }
+
+    none {
+        check exists? {
+         :path "/home/dparfitt/.foobar123"
+        }
+
+
+        check exists? {
+         :path "/home/dparfitt/.foob123"
+        }
+
+
+        check exists? {
+         :path "/home/dpa/.foob123"
+        }
+    }
+}

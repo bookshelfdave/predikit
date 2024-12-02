@@ -1,0 +1,58 @@
+@no_skip_ws
+Whitespace = {Comment |  '\t' | '\n' | '\x0C' | '\r' | ' '};
+
+@no_skip_ws
+Comment = "//" {!'\n' char} '\n';
+
+@string
+@no_skip_ws
+PkCheckFn = 'a'..'z' { 'a'..'z' |'A'..'Z' | '0'..'9' | '_' | '.' | '!' | '?'}+;
+
+@string
+@no_skip_ws
+PkParamName = ":" fn_name:PkCheckFn;
+
+@string
+@no_skip_ws
+PkStringLit = '"' { !('"' | '\n') c:char } '"';
+
+@string
+PkParamTypeBool = "true" | "false";
+
+@string
+PkParamTypeInt = { '0'..'9' }+;
+
+@string
+@no_skip_ws
+PkParamTypeString = '"' { !('"' | '\n') c:char } '"';
+
+@export
+PkTypedParamValue = @:PkParamTypeBool | @:PkParamTypeInt | @:PkParamTypeString;
+
+@export
+PkCheckParam = param_name:PkParamName param_typed_value:PkTypedParamValue;
+
+@export
+PkCheckParams = {params:PkCheckParam};
+
+@string
+PkNegate = "not";
+
+@export
+PkCheckDef = "check" [negate:PkNegate] check_fn:PkCheckFn "{" params:PkCheckParams "}";
+
+@string
+PkAggType = ("all" | "any" | "none") ["@"];
+
+@export
+PkChild = @:PkCheckDef | @:PkGroup;
+
+@export
+PkGroup = agg_type:PkAggType "{"
+      group_params:PkCheckParams
+      {children:PkChild}
+    "}";
+
+
+@export
+PkFile = {groups:PkGroup}+ $;
