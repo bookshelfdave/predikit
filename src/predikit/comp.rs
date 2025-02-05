@@ -147,7 +147,7 @@ mod tests {
         } = urt
         {
             assert_eq!(token.0, 21);
-            assert_eq!(token.1, lalrpop_util::lexer::Token(16, "{"));
+            assert_eq!(token.1, lalrpop_util::lexer::Token(23, "{"));
             assert_eq!(token.2, 22);
         } else {
             panic!("Should have failed");
