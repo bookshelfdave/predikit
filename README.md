@@ -64,6 +64,7 @@ all {
 tool pacman_installed? {
     // a tool has a Handlebars template that is rendered at runtime using
     // defined properties. In this case, pkg_name is rendered as part of the command
+    // A non-zero exit code indicates failure!
     cmd_template: "pacman -Qe {{pkg_name}}"
 
     // Define a `pkg_name` property for `pacman_installed?` that only accepts strings
@@ -157,6 +158,7 @@ cargo build
   - what is being tested is easy to find, the implementation of the test might be in a shell script or some other tool
 - Compilation should be useful to the end user
   - possibly save some headaches
+- Predikit does not maintain state between tests or between invocations.
 - Use a few simple types with optional input validation to help reduce errors at compile time
   - String, Int, Bool
   - duration(), path(), file_perms(), ... functions can validate and convert a specialized input string into a regular String

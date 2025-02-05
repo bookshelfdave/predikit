@@ -50,6 +50,7 @@ all {
 tool pacman_installed? {
     // a tool has a Handlebars template that is rendered at runtime using
     // defined properties. In this case, pkg_name is rendered as part of the command
+    // A non-zero exit code indicates failure!
     cmd_template: "pacman -Qe {{pkg_name}}"
 
     // Define a `pkg_name` property for `pacman_installed?` that only accepts strings
