@@ -4,12 +4,28 @@ Predikit is a minimalistic systems testing language that prioritizes simplicity 
 By shipping a tiny core of functionality and focusing on intuitive, test-oriented workflows, Predikit makes it easy
 to define, compile, and execute tests using CLI tools you're already familiar with.
 
-
-## Status
-
 Predikit is a work in progress as of Feb 2025, and is not stable for _any_ use.
 
+## Why?
+
+I’ve always wanted a lightweight solution to run checks against a system without the overhead of large runtimes. Tools
+like Serverspec and Inspec are great, but they bring unnecessary complexity for many use cases.
+
+During my time leading the Terraform SDK (DevEx) team, where we built Golang libraries to help developers extend
+Terraform with their APIs, I realized how much effort goes into integrating each cloud provider or service. It
+made me think — why not leverage existing CLI tools instead of constantly writing new code? This approach would
+simplify testing and cut down on the need for custom plugins, leading to Predikit's creation.
+
+I also wanted to create an infrastructure tool that doesn’t rely on a bunch of other services (DBs, queues, K8s, etc)
+or a complex architecture just to run something as simple as a "hello world." My goal was a single compiled binary — quick,
+efficient, and straightforward.
+
 ## What does it look like?
+
+> I don't have any documentation yet, so this blob of Predikit code will have to do for the time being. I do plan on writing an
+[mdbook](https://github.com/rust-lang/mdBook)-style tutorial and guide once the bits have settled.
+
+Here's a contrived set of tests that show off several of Predikit's features:
 
 ```
 all {
@@ -160,7 +176,7 @@ cargo build
   - possibly save some headaches
 - Predikit does not maintain state between tests or between invocations.
 - Use a few simple types with optional input validation to help reduce errors at compile time
-  - String, Int, Bool
+  - String, Int, Bool, Path, Duration, etc
   - duration(), path(), file_perms(), ... functions can validate and convert a specialized input string into a regular String
 
 ## Contributions
@@ -190,6 +206,7 @@ test package_version? {
 - hook and shell cleanup
   - specify shell, shell params, etc
 - documentation
+- file:line numbers to non-error output
 - JSON output, minimal output, no color output
 
 ## Out of scope
