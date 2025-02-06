@@ -12,9 +12,10 @@ I’ve always wanted a lightweight solution to run checks against a system witho
 like Serverspec and Inspec are great, but they bring unnecessary complexity for many use cases.
 
 During my time leading the Terraform SDK (DevEx) team, where we built Golang libraries to help developers extend
-Terraform with their APIs, I realized how much effort goes into integrating each cloud provider or service. It
-made me think — why not leverage existing CLI tools instead of constantly writing new code? This approach would
-simplify testing and cut down on the need for custom plugins, leading to Predikit's creation.
+Terraform with their APIs, I realized how much effort goes into integrating each cloud provider or service. While
+I wasn't looking to build tooling that interacted with cloud providers specifically, tt made me think — why not
+leverage existing CLI tools instead of constantly writing new code? This approach would simplify testing and cut
+down on the need for custom plugins, leading to Predikit's creation.
 
 I also wanted to create an infrastructure tool that doesn’t rely on a bunch of other services (DBs, queues, K8s, etc)
 or a complex architecture just to run something as simple as a "hello world." My goal was a single compiled binary — quick,
