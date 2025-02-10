@@ -4,7 +4,9 @@ Predikit is a minimalistic systems testing language that prioritizes simplicity 
 By shipping a tiny core of functionality and focusing on intuitive, test-oriented workflows, Predikit makes it easy
 to define, compile, and execute tests using CLI tools you're already familiar with.
 
-Predikit is a work in progress as of Feb 2025, and is not stable for _any_ use.
+Predikit is a work in progress as of Feb 2025, and is not stable for _any_ use. I am rewriting this in Golang.
+
+
 
 ## Why?
 
@@ -187,6 +189,7 @@ up issues and PRs.
 
 ## Significant work before an initial release
 
+- test fn defaults
 - Queries - run commands and test output against string / regex / int predicate
 
 ```
